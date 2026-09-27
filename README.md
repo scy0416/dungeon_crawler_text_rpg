@@ -10,6 +10,8 @@ FastAPI 기반 마이크로서비스로 만든 텍스트 던전 크롤러 RPG �
 
 ```mermaid
 flowchart TB
+    browser([Browser]) --> web[web :8080<br/>정적 클라이언트 · /api 프록시]
+    web -- "/api/*" --> gw
     client([Client]) --> gw[gateway :8000<br/>라우팅 · 인증 위임]
     gw -- "/auth/*" --> auth[auth-service :8001]
     gw -- "/characters/*" --> char[character-service :8002]
@@ -37,6 +39,7 @@ flowchart TB
 
 | 서비스 | 포트 | 책임 | DB |
 |---|---|---|---|
+| web | 8080 | 웹 클라이언트(HTML/CSS/JS) 서빙, `/api/*`를 Gateway로 프록시 | - |
 | gateway | 8000 | 라우팅, JWT 검증을 auth-service에 위임, `X-User-Id` 부착 | - |
 | auth-service | 8001 | 회원가입, 로그인(JWT 발급), 토큰 검증(내부용) | `auth_db` |
 | character-service | 8002 | 캐릭터·스탯·인벤토리, 휴식 / 전투 결과·퀘스트 보상 반영 | `character_db` |
@@ -104,12 +107,14 @@ docker compose up --build -d
 curl localhost:8000/health
 ```
 
+브라우저에서 **http://localhost:8080** 을 열면 웹 클라이언트로 바로 플레이할 수 있습니다.
+
 기동 시 각 서비스가 `alembic upgrade head`로 스키마와 시드 데이터(던전·몬스터·아이템·퀘스트)를 만듭니다.
 
 > 이전 버전으로 만든 Postgres 볼륨을 쓰고 있다면 새 서비스의 DB가 없습니다. 초기화 스크립트는 여러 번 실행해도 안전하니 한 번 실행하세요:
 > `docker compose exec postgres bash /docker-entrypoint-initdb.d/init-databases.sh`
 
-호스트에는 **Gateway(8000)만** 열립니다. 내부 서비스의 Swagger(`http://localhost:800{1..5}/docs`)나 Redis에 직접 접근하려면 디버그 오버레이를 함께 씁니다:
+호스트에는 **웹 클라이언트(8080)와 Gateway(8000)만** 열립니다. 내부 서비스의 Swagger(`http://localhost:800{1..5}/docs`)나 Redis에 직접 접근하려면 디버그 오버레이를 함께 씁니다:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build -d
@@ -120,6 +125,14 @@ docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build -d
 ```bash
 docker compose up -d --scale character-service=2 --scale quest-service=2
 ```
+
+## 웹 클라이언트
+
+`web/`은 빌드 없는 HTML/CSS/JS 한 페이지를 nginx로 서빙합니다. 브라우저는 같은 출처의 `/api/*`만 호출하고, nginx가 이를 Gateway로 넘깁니다 (CORS 설정 불필요, 백엔드 변경 없음).
+
+- 로그인/회원가입 → 캐릭터 선택·생성 → 게임 화면 (캐릭터·인벤토리 / 던전·턴제 전투 / 퀘스트·알림)
+- 전투가 끝나면 "반영 중…"을 띄우고, 이벤트로 캐릭터·퀘스트·알림이 갱신될 때까지 다시 조회합니다 (최종적 일관성을 화면에서 확인)
+- 하단에 마지막 요청의 `X-Request-ID`가 표시되어, 이 값으로 서버 로그를 추적할 수 있습니다
 
 ## 플레이 예시 (Gateway만 사용)
 
@@ -195,6 +208,7 @@ cd e2e && uv run pytest
 ```
 ├── docker-compose.yml
 ├── docker-compose.debug.yml           # 내부 서비스·Redis 포트를 여는 디버그 오버레이
+├── web/                               # 웹 클라이언트 (nginx + public/{index.html,style.css,app.js})
 ├── .env.example
 ├── tools/dlq.py                       # DLQ 확인/재처리 도구 (uv run)
 ├── infra/postgres/init-databases.sh   # 서비스별 DB/계정 생성

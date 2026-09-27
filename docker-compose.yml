@@ -6,9 +6,19 @@ x-db-service: &db-service
     redis:
       condition: service_healthy
 
-# 호스트에는 Gateway(8000)만 연다. 내부 서비스는 --scale로 여러 개 띄울 수 있다.
+# 호스트에는 웹 클라이언트(8080)와 Gateway(8000)만 연다. 내부 서비스는 --scale로 여러 개 띄울 수 있다.
 # 내부 서비스/Redis에 직접 접근하려면: docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
 services:
+  # 웹 클라이언트 (정적 파일 + /api/* 를 Gateway로 프록시). 브라우저에서 http://localhost:8080
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - gateway
+
   gateway:
     build:
       context: .
