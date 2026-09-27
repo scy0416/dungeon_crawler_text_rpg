@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://dungeon_user:dungeon_pw@localhost:5432/dungeon_db"
+    redis_url: str = "redis://localhost:6379/0"
+    character_service_url: str = "http://localhost:8002"
+    combat_session_ttl_seconds: int = 1800
+    http_timeout_seconds: float = 5.0
 
 
 settings = Settings()
