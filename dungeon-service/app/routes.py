@@ -23,6 +23,7 @@ from app.combat import (
 from app.db import get_session
 from app.errors import AppError
 from app.models import Dungeon, Item, Monster, MonsterDrop
+from app.observability import correlation_id
 from app.schemas import (
     CharacterView,
     CombatRequest,
@@ -193,10 +194,14 @@ async def combat_turn(
         item_drops=item_ids,
         hp_remaining=combat.character.hp,
         mp_remaining=combat.character.mp,
+        correlation_id=correlation_id.get(),
     )
     await redis.xadd(CombatResultEvent.stream_key, event.to_fields())
     await session_store.delete_session(redis, combat.character.id)
-    logger.info("published %s event_id=%s", CombatResultEvent.stream_key, event.event_id)
+    logger.info(
+        "event published",
+        extra={"stream": event.stream_key, "event_id": event.event_id, "result": event.result},
+    )
 
     items = {i.id: i for i in await session.scalars(select(Item).where(Item.id.in_(item_ids)))}
     response.rewards = Rewards(
