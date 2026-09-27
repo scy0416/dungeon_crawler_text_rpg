@@ -3,8 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import Character, InventoryItem
-from app.progression import apply_combat_result
-from shared.events import CombatResultEvent, LevelUpEvent
+from app.progression import apply_combat_result, apply_quest_reward
+from shared.events import CombatResultEvent, LevelUpEvent, QuestCompletedEvent
 
 pytestmark = pytest.mark.anyio
 
@@ -85,3 +85,16 @@ async def test_duplicate_event_is_applied_once(
 async def test_unknown_character_is_skipped(sessionmaker: Sessionmaker) -> None:
     async with sessionmaker() as session:
         assert await apply_combat_result(session, combat_event(character_id=999)) is None
+
+
+async def test_quest_reward_adds_exp_without_touching_hp(
+    sessionmaker: Sessionmaker, character: Character
+) -> None:
+    reward = QuestCompletedEvent(character_id=1, quest_id=1, reward_exp=50)
+    async with sessionmaker() as session:
+        assert await apply_quest_reward(session, reward) is None
+        assert await apply_quest_reward(session, reward) is None  # 중복은 무시
+    async with sessionmaker() as session:
+        updated = await session.get(Character, 1)
+        assert updated is not None
+        assert (updated.exp, updated.hp) == (50, 100)

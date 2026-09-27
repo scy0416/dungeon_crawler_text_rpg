@@ -2,14 +2,15 @@ import pytest
 from fakeredis import FakeAsyncRedis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.consumer import GROUP, NEW, PENDING, STREAM, consume_batch, ensure_group
+from app.consumer import GROUP, NEW, PENDING, consume_batch, ensure_groups
 from app.models import Character
-from shared.events import CombatResultEvent, LevelUpEvent
+from shared.events import CombatResultEvent, LevelUpEvent, QuestCompletedEvent
 
 pytestmark = pytest.mark.anyio
 
 Sessionmaker = async_sessionmaker[AsyncSession]
 CONSUMER = "test-consumer"
+STREAM = CombatResultEvent.stream_key
 
 
 @pytest.fixture
@@ -17,7 +18,7 @@ async def setup(sessionmaker: Sessionmaker, redis: FakeAsyncRedis) -> None:
     async with sessionmaker() as session:
         session.add(Character(id=1, user_id=1, name="Aria"))
         await session.commit()
-    await ensure_group(redis)
+    await ensure_groups(redis)
 
 
 def win_event(exp_gained: int) -> CombatResultEvent:
@@ -34,11 +35,12 @@ async def get_character(sessionmaker: Sessionmaker) -> Character:
         return character
 
 
-async def test_ensure_group_is_idempotent(redis: FakeAsyncRedis) -> None:
-    await ensure_group(redis)
-    await ensure_group(redis)
-    groups = await redis.xinfo_groups(STREAM)
-    assert [g["name"] for g in groups] == [GROUP]
+async def test_ensure_groups_is_idempotent(redis: FakeAsyncRedis) -> None:
+    await ensure_groups(redis)
+    await ensure_groups(redis)
+    for stream in (CombatResultEvent.stream_key, QuestCompletedEvent.stream_key):
+        groups = await redis.xinfo_groups(stream)
+        assert [g["name"] for g in groups] == [GROUP]
 
 
 async def test_consumes_event_and_acks(
@@ -80,3 +82,16 @@ async def test_malformed_message_is_skipped(
     await redis.xadd(STREAM, {"data": "not-json"})
     assert await consume_batch(redis, sessionmaker, CONSUMER, NEW) == 1
     assert (await redis.xpending(STREAM, GROUP))["pending"] == 0
+
+
+async def test_quest_reward_grants_exp_and_can_level_up(
+    setup: None, sessionmaker: Sessionmaker, redis: FakeAsyncRedis
+) -> None:
+    reward = QuestCompletedEvent(character_id=1, quest_id=3, reward_exp=120)
+    await redis.xadd(QuestCompletedEvent.stream_key, reward.to_fields())
+    assert await consume_batch(redis, sessionmaker, CONSUMER, NEW) == 1
+    character = await get_character(sessionmaker)
+    assert (character.level, character.exp) == (2, 20)
+    [(_, fields)] = await redis.xrange(LevelUpEvent.stream_key)
+    assert LevelUpEvent.from_fields(fields).new_level == 2
+    assert (await redis.xpending(QuestCompletedEvent.stream_key, GROUP))["pending"] == 0
