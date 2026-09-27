@@ -6,7 +6,7 @@ import pytest
 from conftest import Player
 
 
-@pytest.mark.parametrize("path", ["/characters", "/dungeons", "/quests"])
+@pytest.mark.parametrize("path", ["/characters", "/dungeons", "/quests", "/notifications"])
 def test_protected_routes_require_token(client: httpx.Client, path: str) -> None:
     response = client.get(path)
     assert response.status_code == 401

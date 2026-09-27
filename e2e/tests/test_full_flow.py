@@ -62,7 +62,23 @@ def test_register_to_quest_completion(player: Player) -> None:
     character = wait_until(
         player.character, lambda c: total_exp(c) == combat_exp + quest["reward_exp"]
     )
-    assert character["level"] >= 1
+
+    # notification-service도 같은 quest.completed를 구독해 알림을 만든다 (다른 서비스 코드 변경 없이 추가된 구독자)
+    def notifications() -> list[dict]:
+        return player.get("/notifications", params={"character_id": player.character_id}).json()
+
+    rows = wait_until(notifications, lambda ns: any(n["type"] == "quest_completed" for n in ns))
+    quest_notice = next(n for n in rows if n["type"] == "quest_completed")
+    assert quest["quest_name"] in quest_notice["message"]
+    if character["level"] > 1:
+        wait_until(notifications, lambda ns: any(n["type"] == "level_up" for n in ns))
+
+    read = player.post(f"/notifications/{quest_notice['id']}/read").json()
+    assert read["read_at"] is not None
+    unread = player.get(
+        "/notifications", params={"character_id": player.character_id, "unread_only": True}
+    ).json()
+    assert quest_notice["id"] not in {n["id"] for n in unread}
 
 
 def test_combat_result_updates_character_and_inventory(player: Player) -> None:
