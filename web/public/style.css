@@ -1,0 +1,142 @@
+:root {
+  --bg: #14110f;
+  --panel: #1e1a17;
+  --panel-2: #26211d;
+  --border: #3a322b;
+  --text: #ece4d8;
+  --muted: #9a8f82;
+  --accent: #d9a441;
+  --accent-ink: #1a1408;
+  --danger: #d9534f;
+  --hp: #c8423b;
+  --mp: #3f7fd1;
+  --exp: #d9a441;
+  --ok: #5fa86a;
+  --radius: 10px;
+  --mono: ui-monospace, "Cascadia Code", "D2Coding", Consolas, monospace;
+  font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1; padding: 20px; }
+[hidden] { display: none !important; }
+h1 { font-size: 1.5rem; margin: 0 0 6px; }
+h2 { font-size: 1.15rem; margin: 0 0 12px; }
+h3 { font-size: 0.95rem; margin: 20px 0 8px; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+
+button {
+  font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.secondary { background: #2f2620; }
+button.ghost { background: transparent; }
+button.small { padding: 4px 10px; font-size: .85rem; }
+button.wide { width: 100%; margin-top: 14px; }
+
+input {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; width: 100%;
+}
+input:focus { outline: none; border-color: var(--accent); }
+label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; color: var(--muted); margin-bottom: 12px; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.brand { font-weight: 800; letter-spacing: .02em; color: var(--accent); }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+.footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 20px; border-top: 1px solid var(--border); font-size: .8rem; }
+.footer code { font-family: var(--mono); color: var(--accent); }
+
+.card, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.center-view { display: flex; justify-content: center; padding-top: 6vh; }
+.auth-card, .characters-card { width: min(420px, 100%); }
+.form-error { color: var(--danger); min-height: 1.2em; margin: 10px 0 0; font-size: .9rem; }
+
+.tabs { display: flex; gap: 4px; margin: 16px 0; border-bottom: 1px solid var(--border); }
+.tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.count { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 7px; font-size: .75rem; margin-left: 4px; }
+
+.inline-form { display: flex; gap: 8px; margin-top: 16px; }
+.inline-form input { flex: 1; }
+
+.character-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.character-list li button { width: 100%; display: flex; justify-content: space-between; text-align: left; padding: 12px 14px; }
+.empty { color: var(--muted); font-size: .9rem; padding: 8px 0; }
+
+/* 게임 화면 */
+.game-view { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 16px; align-items: start; max-width: 1280px; margin: 0 auto; }
+/* 폭이 좁으면 캐릭터 | 전투 2열, 퀘스트/알림은 아래로 */
+@media (max-width: 1100px) {
+  .game-view { grid-template-columns: 240px minmax(0, 1fr); }
+  #panel-side { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  main { padding: 12px; }
+  .brand { white-space: nowrap; }
+  #topbar-username { display: none; }
+  .game-view { grid-template-columns: 1fr; }
+}
+
+.level-line { display: flex; justify-content: space-between; font-size: .9rem; margin-bottom: 6px; }
+.bar { height: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.bar > div { height: 100%; width: 0; transition: width .4s ease; }
+.bar.exp > div { background: var(--exp); }
+.bar.hp > div, .bar.monster-hp > div { background: var(--hp); }
+.bar.mp > div { background: var(--mp); }
+.bar-label { display: flex; justify-content: space-between; font-size: .85rem; margin: 12px 0 4px; }
+.bar-label span:last-child { font-family: var(--mono); color: var(--muted); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 0; }
+.stats div { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.stats dt { font-size: .75rem; color: var(--muted); }
+.stats dd { margin: 2px 0 0; font-size: 1.1rem; font-weight: 700; font-family: var(--mono); }
+
+.inventory { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: .9rem; }
+.inventory li { display: flex; justify-content: space-between; padding: 6px 10px; background: var(--panel-2); border-radius: 6px; }
+.sync { font-size: .8rem; color: var(--accent); min-height: 1.2em; margin: 14px 0 0; }
+
+.dungeon-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.dungeon-list li button { flex-shrink: 0; }
+.dungeon-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
+.dungeon-list .name { font-weight: 700; }
+.dungeon-list .desc { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+
+.combat-header { display: flex; justify-content: space-between; align-items: center; }
+.badge { font-size: .8rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+.monster { background: var(--panel-2); border-radius: 8px; padding: 2px 12px 12px; }
+.combat-log {
+  list-style: none; margin: 14px 0; padding: 12px; height: 300px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: .88rem; line-height: 1.6;
+}
+.combat-log li.turn { color: var(--muted); margin-top: 6px; }
+.combat-log li.good { color: var(--ok); }
+.combat-log li.bad { color: var(--hp); }
+.combat-log li.system { color: var(--accent); }
+.actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.actions small { opacity: .7; font-size: .75rem; }
+.combat-result { text-align: center; padding: 8px 0 0; }
+.combat-result p { font-size: 1.05rem; margin: 0 0 12px; }
+
+.quest-list, .notification-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.quest-list li { padding: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
+.quest-list li.completed { opacity: .6; }
+.quest-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.quest-name { font-weight: 700; }
+.quest-meta { font-size: .8rem; color: var(--muted); margin: 4px 0 8px; }
+.quest-list .bar > div { background: var(--ok); }
+.quest-progress-text { font-family: var(--mono); font-size: .8rem; color: var(--muted); }
+
+.notification-list li { padding: 10px 12px; background: var(--panel-2); border-left: 3px solid var(--accent); border-radius: 6px; font-size: .9rem; cursor: pointer; }
+.notification-list li.read { border-left-color: var(--border); color: var(--muted); cursor: default; }
+.notification-list time { display: block; font-size: .75rem; color: var(--muted); margin-top: 4px; }
+#btn-read-all { margin-bottom: 10px; }
+
+.toast { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--accent); padding: 10px 18px; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.4); }

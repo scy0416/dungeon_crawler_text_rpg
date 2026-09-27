@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>던전 크롤러</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">⚔ 던전 크롤러</div>
+    <div class="topbar-right" id="topbar-user" hidden>
+      <span id="topbar-username"></span>
+      <button class="ghost" id="btn-switch-character" hidden>캐릭터 변경</button>
+      <button class="ghost" id="btn-logout">로그아웃</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 로그인 / 회원가입 -->
+    <section id="view-auth" class="view center-view" hidden>
+      <div class="card auth-card">
+        <h1>던전에 입장하기</h1>
+        <p class="muted">MSA 학습용 텍스트 RPG. 모든 요청은 Gateway 하나로만 갑니다.</p>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-auth-tab="login">로그인</button>
+          <button class="tab" data-auth-tab="register">회원가입</button>
+        </div>
+        <form id="form-auth">
+          <label>아이디<input name="username" autocomplete="username" required minlength="3" maxlength="30"></label>
+          <label>비밀번호<input name="password" type="password" autocomplete="current-password" required minlength="8" maxlength="72"></label>
+          <button type="submit" class="primary" id="btn-auth-submit">로그인</button>
+        </form>
+        <p class="form-error" id="auth-error"></p>
+      </div>
+    </section>
+
+    <!-- 캐릭터 선택 / 생성 -->
+    <section id="view-characters" class="view center-view" hidden>
+      <div class="card characters-card">
+        <h1>캐릭터 선택</h1>
+        <ul class="character-list" id="character-list"></ul>
+        <form id="form-character" class="inline-form">
+          <input name="name" placeholder="새 캐릭터 이름 (2~20자)" required minlength="2" maxlength="20">
+          <button type="submit" class="primary">생성</button>
+        </form>
+        <p class="form-error" id="character-error"></p>
+      </div>
+    </section>
+
+    <!-- 게임 화면 -->
+    <section id="view-game" class="view game-view" hidden>
+      <!-- 캐릭터 -->
+      <aside class="panel" id="panel-character">
+        <h2 id="char-name"></h2>
+        <div class="level-line"><span id="char-level"></span><span class="muted" id="char-exp-text"></span></div>
+        <div class="bar exp"><div id="char-exp-bar"></div></div>
+        <div class="stat-bars">
+          <div class="bar-label"><span>HP</span><span id="char-hp-text"></span></div>
+          <div class="bar hp"><div id="char-hp-bar"></div></div>
+          <div class="bar-label"><span>MP</span><span id="char-mp-text"></span></div>
+          <div class="bar mp"><div id="char-mp-bar"></div></div>
+        </div>
+        <dl class="stats">
+          <div><dt>공격력</dt><dd id="char-atk"></dd></div>
+          <div><dt>방어력</dt><dd id="char-def"></dd></div>
+        </dl>
+        <button id="btn-rest" class="secondary wide">🔥 휴식 (HP/MP 회복)</button>
+        <h3>인벤토리</h3>
+        <ul class="inventory" id="inventory"></ul>
+        <p class="sync" id="sync-status"></p>
+      </aside>
+
+      <!-- 던전 / 전투 -->
+      <section class="panel" id="panel-dungeon">
+        <div id="dungeon-select">
+          <h2>던전</h2>
+          <ul class="dungeon-list" id="dungeon-list"></ul>
+        </div>
+        <div id="combat" hidden>
+          <div class="combat-header">
+            <h2 id="combat-title"></h2>
+            <span class="badge" id="combat-turn"></span>
+          </div>
+          <div class="monster" id="monster-box">
+            <div class="bar-label"><span id="monster-name"></span><span id="monster-hp-text"></span></div>
+            <div class="bar monster-hp"><div id="monster-hp-bar"></div></div>
+          </div>
+          <ol class="combat-log" id="combat-log"></ol>
+          <div class="actions" id="combat-actions">
+            <button data-action="attack" class="primary">⚔ 공격</button>
+            <button data-action="defend">🛡 방어</button>
+            <button data-action="skill" id="btn-skill">✨ 강타 <small>MP 10</small></button>
+            <button data-action="flee">🏃 도망</button>
+          </div>
+          <div class="combat-result" id="combat-result" hidden>
+            <p id="combat-result-text"></p>
+            <button class="primary" id="btn-combat-done">던전 목록으로</button>
+          </div>
+        </div>
+        <p class="form-error" id="dungeon-error"></p>
+      </section>
+
+      <!-- 퀘스트 / 알림 -->
+      <aside class="panel" id="panel-side">
+        <div class="tabs">
+          <button class="tab active" data-side-tab="quests">퀘스트</button>
+          <button class="tab" data-side-tab="notifications">알림 <span class="count" id="unread-count" hidden></span></button>
+        </div>
+        <div id="side-quests">
+          <ul class="quest-list" id="quest-list"></ul>
+        </div>
+        <div id="side-notifications" hidden>
+          <button class="ghost small" id="btn-read-all">모두 읽음</button>
+          <ul class="notification-list" id="notification-list"></ul>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="muted">마지막 요청 ID</span>
+    <code id="last-request-id">-</code>
+    <span class="muted hint">(서버 로그에서 이 값으로 요청 흐름을 추적할 수 있습니다)</span>
+  </footer>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>
