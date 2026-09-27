@@ -22,6 +22,8 @@ class Event(BaseModel):
 
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # 이 이벤트를 일으킨 최초 요청의 ID (Gateway의 X-Request-ID). 연쇄 이벤트에도 그대로 이어진다
+    correlation_id: str | None = None
 
     def to_fields(self) -> dict[str, str]:
         return {DATA_FIELD: self.model_dump_json()}
