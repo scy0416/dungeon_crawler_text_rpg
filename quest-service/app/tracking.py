@@ -30,7 +30,7 @@ def advance(progress: QuestProgress, quest: Quest, value: int) -> QuestCompleted
 async def mark_processed(session: AsyncSession, event_id: str) -> bool:
     """처음 보는 이벤트면 처리 기록을 추가하고 True, 이미 처리했으면 False."""
     if await session.get(ProcessedEvent, event_id):
-        logger.info("duplicate event skipped event_id=%s", event_id)
+        logger.info("duplicate event skipped", extra={"event_id": event_id})
         return False
     session.add(ProcessedEvent(event_id=event_id))
     return True

@@ -12,6 +12,7 @@ from app.clients import fetch_character
 from app.db import get_session
 from app.errors import AppError
 from app.models import Quest, QuestProgress
+from app.observability import correlation_id
 from app.schemas import AcceptRequest, HealthResponse, QuestProgressResponse, QuestResponse
 from app.tracking import IN_PROGRESS, advance
 
@@ -118,8 +119,11 @@ async def accept_quest(
     await session.refresh(progress)
 
     if completed:
+        completed.correlation_id = correlation_id.get()
         await redis.xadd(completed.stream_key, completed.to_fields())
-        logger.info("published %s event_id=%s", completed.stream_key, completed.event_id)
+        logger.info(
+            "event published", extra={"stream": completed.stream_key, "event_id": completed.event_id}
+        )
     return progress_response(progress, quest)
 
 

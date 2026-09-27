@@ -38,3 +38,8 @@ def register_error_handlers(app: FastAPI) -> None:
             f"{'.'.join(str(part) for part in err['loc'])}: {err['msg']}" for err in exc.errors()
         )
         return error_response(422, "VALIDATION_ERROR", message)
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        # 상세 내용(traceback)은 로그로만 남기고 클라이언트에는 공통 메시지만 돌려준다
+        return error_response(500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다.")

@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.observability import correlation_id
 from app.tracking import apply_combat_result, apply_level_up
 from shared.events import CombatResultEvent, Event, LevelUpEvent
 
@@ -55,17 +56,27 @@ async def handle_entry(
     entry_id: str,
     fields: dict[str, str] | None,
 ) -> None:
+    token = None
     try:
         if fields:  # 스트림에서 삭제된 pending 메시지는 fields가 비어 있다
+            received = Event.from_fields(fields)
+            # 받은 이벤트의 correlation_id를 이 처리 과정의 로그와 후속 이벤트에 이어 붙인다
+            token = correlation_id.set(received.correlation_id or received.event_id)
+            logger.info("event consumed", extra={"stream": stream, "event_id": received.event_id})
             async with sessionmaker() as session:
                 events = await HANDLERS[stream](session, fields)
             for event in events:
+                event.correlation_id = correlation_id.get()
                 await redis.xadd(event.stream_key, event.to_fields())
-                logger.info("published %s event_id=%s", event.stream_key, event.event_id)
+                logger.info(
+                    "event published", extra={"stream": event.stream_key, "event_id": event.event_id}
+                )
     except Exception:
         # 초기 버전 실패 처리 원칙: 로그만 남기고 스킵 (DLQ는 Phase 5 확장 과제)
-        logger.exception("failed to handle stream=%s entry_id=%s, skipped", stream, entry_id)
+        logger.exception("event handling failed, skipped", extra={"stream": stream, "entry_id": entry_id})
     await redis.xack(stream, GROUP, entry_id)
+    if token:
+        correlation_id.reset(token)
 
 
 async def consume_batch(
@@ -94,7 +105,7 @@ async def run_consumer(
     # 재시작 복구: 이전에 받고 ACK하지 못한 메시지부터 처리한다
     while await consume_batch(redis, sessionmaker, consumer_name, PENDING):
         pass
-    logger.info("consumer started group=%s consumer=%s", GROUP, consumer_name)
+    logger.info("consumer started", extra={"group": GROUP, "consumer": consumer_name})
     while True:
         try:
             await consume_batch(redis, sessionmaker, consumer_name, NEW, BLOCK_MS)
