@@ -61,10 +61,12 @@ class LevelUpEvent(Event):
 
 
 class QuestCompletedEvent(Event):
-    """퀘스트 완료. quest-service 발행 → character-service 구독(보상 지급)."""
+    """퀘스트 완료. quest-service 발행 → character-service(보상 지급), notification-service 구독."""
 
     stream_key: ClassVar[str] = "quest.completed"
 
     character_id: int
     quest_id: int
+    # 구독자가 quest-service를 다시 호출하지 않아도 되도록 필요한 정보를 이벤트에 싣는다
+    quest_name: str = ""
     reward_exp: int
