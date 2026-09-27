@@ -1,0 +1,89 @@
+x-db-service: &db-service
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - character-service
+      - dungeon-service
+      - quest-service
+
+  auth-service:
+    <<: *db-service
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://auth_user:${AUTH_DB_PASSWORD}@postgres:5432/auth_db
+
+  character-service:
+    <<: *db-service
+    build:
+      context: .
+      dockerfile: character-service/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://character_user:${CHARACTER_DB_PASSWORD}@postgres:5432/character_db
+
+  dungeon-service:
+    <<: *db-service
+    build:
+      context: .
+      dockerfile: dungeon-service/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dungeon_user:${DUNGEON_DB_PASSWORD}@postgres:5432/dungeon_db
+
+  quest-service:
+    <<: *db-service
+    build:
+      context: .
+      dockerfile: quest-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quest_user:${QUEST_DB_PASSWORD}@postgres:5432/quest_db
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      CHARACTER_DB_PASSWORD: ${CHARACTER_DB_PASSWORD}
+      DUNGEON_DB_PASSWORD: ${DUNGEON_DB_PASSWORD}
+      QUEST_DB_PASSWORD: ${QUEST_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
