@@ -21,7 +21,9 @@ correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=No
 logger = logging.getLogger("app.access")
 
 # LogRecord 기본 속성. 이 외의 속성(logger.info(..., extra={...}))은 JSON 필드로 출력한다
-_STANDARD_ATTRS = set(vars(logging.makeLogRecord({}))) | {"message", "asctime", "taskName"}
+_STANDARD_ATTRS = set(vars(logging.makeLogRecord({}))) | {
+    "message", "asctime", "taskName", "color_message"  # color_message: uvicorn의 ANSI 색상 중복 메시지
+}
 
 
 class JsonFormatter(logging.Formatter):

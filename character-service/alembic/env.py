@@ -1,7 +1,7 @@
 import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -58,10 +58,16 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# 같은 서비스 인스턴스 여러 개(--scale)가 동시에 기동해도 마이그레이션은 한 번에 하나만 돈다
+MIGRATION_LOCK_ID = 7_300_001
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
+        # 트랜잭션이 끝날 때 자동으로 풀리는 advisory lock. 늦게 온 인스턴스는 기다렸다가 이미 head임을 확인한다
+        connection.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": MIGRATION_LOCK_ID})
         context.run_migrations()
 
 

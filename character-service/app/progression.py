@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Character, InventoryItem, ProcessedEvent
+from app.outbox import add_to_outbox
 from shared.events import CombatResultEvent, LevelUpEvent, QuestCompletedEvent
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ async def claim_event(
 async def apply_combat_result(
     session: AsyncSession, event: CombatResultEvent
 ) -> LevelUpEvent | None:
-    """전투 결과를 캐릭터에 반영한다. 레벨이 올랐으면 발행할 LevelUpEvent를 반환한다."""
+    """전투 결과를 캐릭터에 반영한다. 레벨이 올랐으면 LevelUpEvent를 outbox에 넣고 반환한다."""
     character = await claim_event(session, event.event_id, event.character_id)
     if character is None:
         return None
@@ -83,6 +84,8 @@ async def apply_combat_result(
             session.add(item)
         item.quantity += count
 
+    if level_up_event:
+        add_to_outbox(session, level_up_event)
     await session.commit()
     return level_up_event
 
@@ -90,10 +93,12 @@ async def apply_combat_result(
 async def apply_quest_reward(
     session: AsyncSession, event: QuestCompletedEvent
 ) -> LevelUpEvent | None:
-    """퀘스트 보상 경험치를 지급한다. 레벨이 올랐으면 발행할 LevelUpEvent를 반환한다."""
+    """퀘스트 보상 경험치를 지급한다. 레벨이 올랐으면 LevelUpEvent를 outbox에 넣고 반환한다."""
     character = await claim_event(session, event.event_id, event.character_id)
     if character is None:
         return None
     level_up_event = gain_exp(character, event.reward_exp)
+    if level_up_event:
+        add_to_outbox(session, level_up_event)
     await session.commit()
     return level_up_event
