@@ -196,8 +196,7 @@ async def combat_turn(
         mp_remaining=combat.character.mp,
         correlation_id=correlation_id.get(),
     )
-    await redis.xadd(CombatResultEvent.stream_key, event.to_fields())
-    await session_store.delete_session(redis, combat.character.id)
+    await session_store.end_session_with_event(redis, combat.character.id, event)
     logger.info(
         "event published",
         extra={"stream": event.stream_key, "event_id": event.event_id, "result": event.result},
