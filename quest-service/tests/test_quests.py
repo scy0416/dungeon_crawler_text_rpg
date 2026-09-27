@@ -1,6 +1,9 @@
 import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.outbox import relay_once
 
 from shared.events import QuestCompletedEvent
 
@@ -53,13 +56,19 @@ async def test_accept_reach_level_starts_from_current_level(client: httpx.AsyncC
 
 
 async def test_accept_reach_level_already_reached_completes_immediately(
-    client: httpx.AsyncClient, redis: FakeAsyncRedis
+    client: httpx.AsyncClient,
+    redis: FakeAsyncRedis,
+    sessionmaker: async_sessionmaker[AsyncSession],
 ) -> None:
     response = await client.post("/quests/4/accept", json={"character_id": 3}, headers=USER_1)
     assert response.json()["status"] == "completed"
+    # 완료 이벤트는 수락과 같은 트랜잭션으로 outbox에 저장되고 릴레이가 발행한다
+    assert await relay_once(redis, sessionmaker) == 1
     [(_, fields)] = await redis.xrange(QuestCompletedEvent.stream_key)
     event = QuestCompletedEvent.from_fields(fields)
-    assert (event.character_id, event.quest_id, event.reward_exp) == (3, 4, 100)
+    assert (event.character_id, event.quest_id, event.quest_name, event.reward_exp) == (
+        3, 4, "quest4", 100
+    )
 
 
 async def test_progress_lists_only_own_character(client: httpx.AsyncClient) -> None:

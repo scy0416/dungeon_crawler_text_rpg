@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_session, settings
 from app.main import app
 from app.models import Base, Quest
-from app.routes import get_http_client, get_redis
+from app.routes import get_http_client
 
 # 테스트용 퀘스트: id → (type, target_id, target_count, min_level, reward_exp)
 QUESTS = {
@@ -60,7 +60,7 @@ async def redis() -> AsyncIterator[FakeAsyncRedis]:
 
 @pytest.fixture
 async def client(
-    sessionmaker: async_sessionmaker[AsyncSession], redis: FakeAsyncRedis
+    sessionmaker: async_sessionmaker[AsyncSession],
 ) -> AsyncIterator[httpx.AsyncClient]:
     async def override_get_session() -> AsyncIterator[AsyncSession]:
         async with sessionmaker() as session:
@@ -77,7 +77,6 @@ async def client(
         base_url=settings.character_service_url,
     )
     app.dependency_overrides[get_session] = override_get_session
-    app.dependency_overrides[get_redis] = lambda: redis
     app.dependency_overrides[get_http_client] = lambda: http_client
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

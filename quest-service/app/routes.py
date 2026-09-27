@@ -1,9 +1,7 @@
-import logging
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, Header, Query, Request
-from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,20 +10,14 @@ from app.clients import fetch_character
 from app.db import get_session
 from app.errors import AppError
 from app.models import Quest, QuestProgress
-from app.observability import correlation_id
+from app.outbox import add_to_outbox, notify_relay
 from app.schemas import AcceptRequest, HealthResponse, QuestProgressResponse, QuestResponse
 from app.tracking import IN_PROGRESS, advance
 
 SERVICE_NAME = "quest-service"
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
 quest_router = APIRouter(prefix="/quests", tags=["quests"])
-
-
-def get_redis(request: Request) -> Redis:
-    return request.app.state.redis
 
 
 def get_http_client(request: Request) -> httpx.AsyncClient:
@@ -40,7 +32,6 @@ async def get_current_user_id(x_user_id: Annotated[int | None, Header()] = None)
 
 
 Session = Annotated[AsyncSession, Depends(get_session)]
-RedisClient = Annotated[Redis, Depends(get_redis)]
 HttpClient = Annotated[httpx.AsyncClient, Depends(get_http_client)]
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
@@ -89,7 +80,6 @@ async def accept_quest(
     body: AcceptRequest,
     user_id: CurrentUserId,
     session: Session,
-    redis: RedisClient,
     http: HttpClient,
 ) -> QuestProgressResponse:
     quest = await session.get(Quest, quest_id)
@@ -111,19 +101,16 @@ async def accept_quest(
     # 레벨 도달 퀘스트는 현재 레벨에서 시작한다 (이미 도달했으면 즉시 완료)
     completed = advance(progress, quest, character.level) if quest.type == "reach_level" else None
     session.add(progress)
+    if completed:
+        add_to_outbox(session, completed)  # 수락과 완료 이벤트를 한 트랜잭션으로
     try:
         await session.commit()
     except IntegrityError:
         await session.rollback()
         raise AppError(409, "QUEST_ALREADY_ACCEPTED", "이미 수락한 퀘스트입니다.")
     await session.refresh(progress)
-
     if completed:
-        completed.correlation_id = correlation_id.get()
-        await redis.xadd(completed.stream_key, completed.to_fields())
-        logger.info(
-            "event published", extra={"stream": completed.stream_key, "event_id": completed.event_id}
-        )
+        notify_relay()
     return progress_response(progress, quest)
 
 

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ProcessedEvent, Quest, QuestProgress
+from app.outbox import add_to_outbox
 from shared.events import CombatResultEvent, LevelUpEvent, QuestCompletedEvent
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,10 @@ def advance(progress: QuestProgress, quest: Quest, value: int) -> QuestCompleted
     progress.status = COMPLETED
     progress.completed_at = datetime.now(UTC)
     return QuestCompletedEvent(
-        character_id=progress.character_id, quest_id=quest.id, reward_exp=quest.reward_exp
+        character_id=progress.character_id,
+        quest_id=quest.id,
+        quest_name=quest.name,
+        reward_exp=quest.reward_exp,
     )
 
 
@@ -74,6 +78,8 @@ async def apply_combat_result(
             amount = combat_progress_amount(quest, event)
             if amount and (done := advance(progress, quest, progress.progress + amount)):
                 completed.append(done)
+    for event in completed:
+        add_to_outbox(session, event)
     await session.commit()
     return completed
 
@@ -85,5 +91,7 @@ async def apply_level_up(session: AsyncSession, event: LevelUpEvent) -> list[Que
     for progress, quest in await active_quests(session, event.character_id, ("reach_level",)):
         if done := advance(progress, quest, event.new_level):
             completed.append(done)
+    for event in completed:
+        add_to_outbox(session, event)
     await session.commit()
     return completed
