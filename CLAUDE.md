@@ -39,6 +39,9 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 - **DB**: 처음부터 PostgreSQL + SQLAlchemy 2.x async(asyncpg). 서비스는 자기 전용 계정으로 자기 DB에만 접속
 - **스키마 변경**: 서비스별 Alembic 마이그레이션만 사용. `Base.metadata.create_all` 사용 금지
 - **shared 사용**: docker-compose 빌드 컨텍스트는 리포 루트, Dockerfile이 `shared/`를 COPY. `shared/`에는 이벤트 스키마 등 계약만 둔다
+- **인증**: Gateway가 auth-service `GET /auth/verify`에 검증을 위임하고, 통과하면 `X-User-Id` 헤더를 붙여 전달한다. 내부 서비스는 JWT를 직접 검증하지 않고 `X-User-Id`만 신뢰한다. JWT 비밀키는 auth-service만 가진다
+- **에러 처리**: 각 서비스의 `app/errors.py`에서 `AppError` + 예외 핸들러로 공통 에러 포맷을 만든다 (서비스 간 코드 공유 금지이므로 서비스마다 각자 둔다)
+- **테스트 DB**: 단위 테스트는 인메모리 SQLite(aiosqlite)로 `get_session`을 override 한다. 테스트에서만 `create_all` 허용
 - **스탯 갱신**: character-service의 스탯 변경은 이벤트 컨슈머 → 내부 함수로만. 스탯 변경용 HTTP 엔드포인트를 만들지 않는다
 
 ## 개발 명령어

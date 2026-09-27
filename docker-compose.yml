@@ -13,6 +13,9 @@ services:
       dockerfile: gateway/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8001
+      CHARACTER_SERVICE_URL: http://character-service:8002
     depends_on:
       - auth-service
       - character-service
@@ -28,6 +31,7 @@ services:
       - "8001:8001"
     environment:
       DATABASE_URL: postgresql+asyncpg://auth_user:${AUTH_DB_PASSWORD}@postgres:5432/auth_db
+      JWT_SECRET: ${JWT_SECRET}
 
   character-service:
     <<: *db-service
