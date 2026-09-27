@@ -56,3 +56,13 @@ class LevelUpEvent(Event):
 
     character_id: int
     new_level: int
+
+
+class QuestCompletedEvent(Event):
+    """퀘스트 완료. quest-service 발행 → character-service 구독(보상 지급)."""
+
+    stream_key: ClassVar[str] = "quest.completed"
+
+    character_id: int
+    quest_id: int
+    reward_exp: int
