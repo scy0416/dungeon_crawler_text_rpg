@@ -17,6 +17,7 @@ services:
       AUTH_SERVICE_URL: http://auth-service:8001
       CHARACTER_SERVICE_URL: http://character-service:8002
       DUNGEON_SERVICE_URL: http://dungeon-service:8003
+      QUEST_SERVICE_URL: http://quest-service:8004
     depends_on:
       - auth-service
       - character-service
@@ -68,6 +69,9 @@ services:
       - "8004:8004"
     environment:
       DATABASE_URL: postgresql+asyncpg://quest_user:${QUEST_DB_PASSWORD}@postgres:5432/quest_db
+      REDIS_URL: redis://redis:6379/0
+      CHARACTER_SERVICE_URL: http://character-service:8002
+      CONSUMER_NAME: quest-service-1
 
   postgres:
     image: postgres:16-alpine

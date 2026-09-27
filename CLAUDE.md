@@ -24,9 +24,9 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 |---|---|---|
 | gateway | 8000 | 라우팅 전용 |
 | auth-service | 8001 | 회원가입/로그인/JWT |
-| character-service | 8002 | 캐릭터 스탯/인벤토리, `combat_result` 구독 |
+| character-service | 8002 | 캐릭터 스탯/인벤토리, `combat_result`/`quest.completed` 구독, `level_up` 발행 |
 | dungeon-service | 8003 | 전투 로직, `combat_result` 발행 |
-| quest-service | 8004 | 퀘스트 진행도, `combat_result`/`level_up` 구독 |
+| quest-service | 8004 | 퀘스트 진행도, `combat_result`/`level_up` 구독, `quest.completed` 발행 |
 | redis | 6379 | 이벤트 버스 (Streams) |
 | postgres | 5432 | 컨테이너 1개, 서비스별 DB/계정 분리 (`auth_db`, `character_db`, `dungeon_db`, `quest_db`) |
 
@@ -43,6 +43,8 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 - **에러 처리**: 각 서비스의 `app/errors.py`에서 `AppError` + 예외 핸들러로 공통 에러 포맷을 만든다 (서비스 간 코드 공유 금지이므로 서비스마다 각자 둔다)
 - **테스트 DB**: 단위 테스트는 인메모리 SQLite(aiosqlite)로 `get_session`을 override 한다. 테스트에서만 `create_all` 허용
 - **스탯 갱신**: 전투 결과에 따른 스탯 변경은 이벤트 컨슈머 → 내부 함수(`app/progression.py`)로만. 전투 결과를 반영하는 HTTP 엔드포인트를 만들지 않는다. 휴식처럼 플레이어가 직접 하는 행동은 HTTP로 처리한다
+- **퀘스트 규칙**: 기획서 4.5.1이 기준. 진행 규칙은 quest-service `app/tracking.py`에 둔다
+- **컨슈머 구조**: `app/consumer.py`의 `HANDLERS`(스트림 → 처리 함수)에 스트림을 추가하는 방식. 처리 함수가 반환한 이벤트는 커밋 후 발행한다
 - **전투 규칙**: 기획서 4.4.1이 기준. dungeon-service `app/combat.py`는 I/O 없는 순수 로직으로 유지하고 난수는 반드시 세션 시드에서 파생한다
 
 ## 개발 명령어
