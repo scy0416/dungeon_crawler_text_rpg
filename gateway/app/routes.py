@@ -120,3 +120,13 @@ async def quest_proxy(request: Request, client: HttpClient, path: str = "") -> R
         return auth
     url = f"{settings.quest_service_url}/quests" + (f"/{path}" if path else "")
     return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})
+
+
+@router.api_route("/notifications", methods=METHODS)
+@router.api_route("/notifications/{path:path}", methods=METHODS)
+async def notification_proxy(request: Request, client: HttpClient, path: str = "") -> Response:
+    auth = await authenticate(client, request)
+    if isinstance(auth, Response):
+        return auth
+    url = f"{settings.notification_service_url}/notifications" + (f"/{path}" if path else "")
+    return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})

@@ -36,6 +36,8 @@ async def client(upstream: list[httpx.Request]) -> AsyncIterator[httpx.AsyncClie
             )
         if url.startswith(settings.auth_service_url):
             return httpx.Response(201, json={"id": 1, "username": "hero"})
+        if url.startswith(settings.notification_service_url):
+            return httpx.Response(200, json={"user_id": request.headers.get("x-user-id")})
         if url.startswith(settings.quest_service_url):
             return httpx.Response(200, json={"user_id": request.headers.get("x-user-id")})
         if url.startswith(settings.dungeon_service_url):
@@ -153,3 +155,14 @@ async def test_client_request_id_is_kept(
     )
     assert response.headers["x-request-id"] == "trace-me"
     assert upstream[-1].headers["x-request-id"] == "trace-me"
+
+
+async def test_notification_route_is_protected_and_forwarded(
+    client: httpx.AsyncClient, upstream: list[httpx.Request]
+) -> None:
+    assert (await client.get("/notifications")).status_code == 401
+    response = await client.post("/notifications/9/read", headers={"Authorization": "Bearer good"})
+    assert response.status_code == 200
+    forwarded = upstream[-1]
+    assert str(forwarded.url) == f"{settings.notification_service_url}/notifications/9/read"
+    assert forwarded.headers["x-user-id"] == "7"
