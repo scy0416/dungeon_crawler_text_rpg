@@ -54,6 +54,7 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
   - `app/consumer.py`: 이벤트를 구독하는 서비스 / `app/outbox.py`: DB를 가진 이벤트 발행 서비스
 - **컨슈머 구조**: 범용 `StreamConsumer`(`app/consumer.py`)에 서비스별 `GROUP`/`HANDLERS`(`app/handlers.py`)를 넘긴다. 성공하면 ACK, 실패하면 pending으로 남겨 XAUTOCLAIM으로 재시도, 3회 실패·파싱/스키마 오류는 `{stream}.dlq`로 보낸다 (기획서 5.3)
 - **이벤트 발행**: DB를 가진 서비스는 Redis에 직접 `XADD`하지 않고 `add_to_outbox(session, event)`로 상태 변경과 같은 트랜잭션에 저장한다 (릴레이가 발행). DB가 없는 dungeon-service는 `XADD` + 세션 삭제를 Redis `MULTI`로 묶는다
+- **배포 준비**: ECS 배포 명세는 `docs/deployment-ecs.md`. 이미지는 호스트 파일 bind mount에 의존하지 않게 만든다 (Postgres 초기화 스크립트는 `infra/postgres` 이미지에 포함, nginx 설정은 기동 시 환경변수로 생성). 서비스 CMD는 마이그레이션 재시도 후 `exec uvicorn`
 - **스케일 아웃**: 컨슈머 이름은 hostname이라 `--scale`로 늘릴 수 있다. 마이그레이션은 Postgres advisory lock으로 인스턴스 간 직렬화된다
 - **웹 클라이언트**: `web/`은 Gateway API만 호출하는 외부 소비자다. 클라이언트를 위해 백엔드에 전용 로직을 넣지 않는다. 서버 데이터는 `textContent`로만 렌더링한다 (innerHTML 금지)
 - **전투 규칙**: 기획서 4.4.1이 기준. dungeon-service `app/combat.py`는 I/O 없는 순수 로직으로 유지하고 난수는 반드시 세션 시드에서 파생한다

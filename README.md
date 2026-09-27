@@ -211,7 +211,9 @@ cd e2e && uv run pytest
 ├── web/                               # 웹 클라이언트 (nginx + public/{index.html,style.css,app.js})
 ├── .env.example
 ├── tools/dlq.py                       # DLQ 확인/재처리 도구 (uv run)
-├── infra/postgres/init-databases.sh   # 서비스별 DB/계정 생성
+├── scripts/build-images.sh            # 배포용 이미지 빌드/태그/push
+├── docs/deployment-ecs.md             # ECS(Fargate) 배포 명세
+├── infra/postgres/                    # Postgres 이미지 (서비스별 DB/계정 초기화 스크립트 포함)
 ├── shared/events.py                   # 이벤트 스키마 (서비스 간 유일한 공유 코드)
 ├── gateway/
 ├── auth-service/                      # 서비스 공통 구조:
@@ -222,6 +224,14 @@ cd e2e && uv run pytest
 ├── notification-service/
 └── e2e/                               # 엔드투엔드 테스트 (독립 uv 프로젝트)
 ```
+
+## 배포 (AWS ECS)
+
+아직 배포하지 않았지만, Terraform만 작성하면 ECS(Fargate)에 올릴 수 있게 준비돼 있습니다.
+
+- 명세: [docs/deployment-ecs.md](docs/deployment-ecs.md) — 서비스별 이미지·포트·환경변수·비밀값·헬스체크·볼륨·네트워크
+- 이미지 빌드/푸시: `REGISTRY=<ECR 주소> ./scripts/build-images.sh --push`
+- 컨테이너 구성은 compose와 동일하게 유지 (PostgreSQL·Redis도 컨테이너, Postgres 데이터는 EFS)
 
 ## 기술 스택
 Python 3.12 · FastAPI · SQLAlchemy 2 (async, asyncpg) · Alembic · PostgreSQL 16 · Redis 7 (Streams) · httpx · python-jose · uv · Docker Compose · pytest
