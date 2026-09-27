@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 
 from app.errors import register_error_handlers
-from app.routes import router
+from app.observability import add_correlation_middleware, setup_logging
+from app.routes import SERVICE_NAME, router
 
-app = FastAPI(title="auth-service")
+setup_logging(SERVICE_NAME)
+
+app = FastAPI(title=SERVICE_NAME)
+add_correlation_middleware(app)
 register_error_handlers(app)
 app.include_router(router)
