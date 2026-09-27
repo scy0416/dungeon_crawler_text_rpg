@@ -100,3 +100,13 @@ async def character_proxy(request: Request, client: HttpClient, path: str = "") 
         return auth
     url = f"{settings.character_service_url}/characters" + (f"/{path}" if path else "")
     return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})
+
+
+@router.api_route("/dungeons", methods=METHODS)
+@router.api_route("/dungeons/{path:path}", methods=METHODS)
+async def dungeon_proxy(request: Request, client: HttpClient, path: str = "") -> Response:
+    auth = await authenticate(client, request)
+    if isinstance(auth, Response):
+        return auth
+    url = f"{settings.dungeon_service_url}/dungeons" + (f"/{path}" if path else "")
+    return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})
