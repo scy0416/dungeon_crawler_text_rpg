@@ -64,6 +64,24 @@ sequenceDiagram
 - Consumer Group: `{service-name}-group`, 이벤트마다 `event_id`로 멱등 처리
 - 서비스가 꺼져 있어도 이벤트는 스트림에 남고, 재시작하면 이어서 처리한다
 
+### 신뢰성 장치 (최소 한 번 전달 + 멱등 소비)
+| 장치 | 해결하는 문제 |
+|---|---|
+| **Transactional Outbox** (character/quest) | DB는 커밋됐는데 이벤트 발행이 실패해 유실되는 문제. 이벤트를 같은 트랜잭션으로 `outbox` 테이블에 쓰고 릴레이가 발행 |
+| **Redis `MULTI`** (dungeon) | 전투 종료 이벤트 발행과 세션 삭제 중 하나만 반영되는 문제 |
+| **XAUTOCLAIM** | 처리 도중 죽은 인스턴스가 쥐고 있던 메시지가 영영 처리되지 않는 문제. 30초 이상 방치된 pending 메시지를 다른 인스턴스가 회수해 재시도 |
+| **DLQ** | 계속 실패하는 메시지가 무한 재시도되거나 버려지는 문제. 3회 실패 또는 파싱/스키마 오류 시 `{stream}.dlq`로 격리 |
+
+DLQ 확인과 재처리 (디버그 오버레이로 Redis 포트가 열려 있어야 함):
+
+```bash
+uv run tools/dlq.py list
+```
+
+```bash
+uv run tools/dlq.py redrive dungeon.combat_result.dlq
+```
+
 ## 빠른 시작
 
 ```bash
@@ -79,7 +97,18 @@ curl localhost:8000/health
 ```
 
 기동 시 각 서비스가 `alembic upgrade head`로 스키마와 시드 데이터(던전·몬스터·아이템·퀘스트)를 만듭니다.
-Swagger 문서는 서비스별로 `http://localhost:800{1..4}/docs`에서 볼 수 있습니다.
+
+호스트에는 **Gateway(8000)만** 열립니다. 내부 서비스의 Swagger(`http://localhost:800{1..4}/docs`)나 Redis에 직접 접근하려면 디버그 오버레이를 함께 씁니다:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build -d
+```
+
+컨슈머 서비스는 여러 인스턴스로 늘릴 수 있습니다 (디버그 오버레이 없이):
+
+```bash
+docker compose up -d --scale character-service=2 --scale quest-service=2
+```
 
 ## 플레이 예시 (Gateway만 사용)
 
@@ -151,12 +180,15 @@ cd e2e && uv run pytest
 
 ```
 ├── docker-compose.yml
+├── docker-compose.debug.yml           # 내부 서비스·Redis 포트를 여는 디버그 오버레이
 ├── .env.example
+├── tools/dlq.py                       # DLQ 확인/재처리 도구 (uv run)
 ├── infra/postgres/init-databases.sh   # 서비스별 DB/계정 생성
 ├── shared/events.py                   # 이벤트 스키마 (서비스 간 유일한 공유 코드)
 ├── gateway/
 ├── auth-service/                      # 서비스 공통 구조:
 ├── character-service/                 #   app/{main,routes,schemas,models,db,errors,observability}.py
+│                                      #   (+ 구독: consumer.py·handlers.py, 발행: outbox.py)
 ├── dungeon-service/                   #   alembic/, tests/, pyproject.toml, uv.lock, Dockerfile
 ├── quest-service/
 └── e2e/                               # 엔드투엔드 테스트 (독립 uv 프로젝트)
@@ -165,11 +197,10 @@ cd e2e && uv run pytest
 ## 기술 스택
 Python 3.12 · FastAPI · SQLAlchemy 2 (async, asyncpg) · Alembic · PostgreSQL 16 · Redis 7 (Streams) · httpx · python-jose · uv · Docker Compose · pytest
 
-## 알려진 한계와 확장 과제
+## 알려진 한계
 - 전투 직후 바로 재입장하면 이벤트가 아직 반영되지 않아 이전 HP로 시작할 수 있다 (최종적 일관성)
-- DB 커밋 후 이벤트 발행 전에 죽으면 후속 이벤트가 유실될 수 있다 → Outbox 패턴
-- 컨슈머 다중 인스턴스 시 죽은 컨슈머의 pending 메시지 회수 → `XAUTOCLAIM`
-- 소비 실패 시 로그만 남기고 스킵 → DLQ
-- 내부 서비스 포트(8001~8004)는 디버깅용으로 호스트에 열려 있어 Gateway를 우회할 수 있다
+- 발행된 outbox 행과 `processed_events`는 정리(보존 기간 삭제)하지 않는다
+- 스케일을 줄이거나 컨테이너를 재생성하면 사라진 컨슈머 이름이 Consumer Group에 남는다 (pending은 XAUTOCLAIM으로 회수되므로 동작에는 영향 없음)
+- 디버그 오버레이를 쓰면 내부 서비스 포트가 열려 Gateway를 우회할 수 있다
 
-자세한 목록은 기획서 "Phase 5 — 확장 과제"를 참고하세요.
+남은 확장 과제는 기획서 "Phase 5 — 확장 과제"를 참고하세요.

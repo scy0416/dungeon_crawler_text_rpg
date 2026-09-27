@@ -1,0 +1,19 @@
+# 디버깅용 오버레이: 내부 서비스(Swagger 등)와 Redis를 호스트에 연다.
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+# 이 파일을 쓰면 포트가 고정되므로 --scale은 사용할 수 없다.
+services:
+  auth-service:
+    ports:
+      - "8001:8001"
+  character-service:
+    ports:
+      - "8002:8002"
+  dungeon-service:
+    ports:
+      - "8003:8003"
+  quest-service:
+    ports:
+      - "8004:8004"
+  redis:
+    ports:
+      - "6379:6379"

@@ -6,6 +6,8 @@ x-db-service: &db-service
     redis:
       condition: service_healthy
 
+# 호스트에는 Gateway(8000)만 연다. 내부 서비스는 --scale로 여러 개 띄울 수 있다.
+# 내부 서비스/Redis에 직접 접근하려면: docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
 services:
   gateway:
     build:
@@ -29,8 +31,6 @@ services:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
-    ports:
-      - "8001:8001"
     environment:
       DATABASE_URL: postgresql+asyncpg://auth_user:${AUTH_DB_PASSWORD}@postgres:5432/auth_db
       JWT_SECRET: ${JWT_SECRET}
@@ -40,21 +40,15 @@ services:
     build:
       context: .
       dockerfile: character-service/Dockerfile
-    ports:
-      - "8002:8002"
     environment:
       DATABASE_URL: postgresql+asyncpg://character_user:${CHARACTER_DB_PASSWORD}@postgres:5432/character_db
       REDIS_URL: redis://redis:6379/0
-      # 재시작해도 같은 이름을 써야 pending 메시지를 이어받는다 (다중 인스턴스 시 인스턴스별로 달라야 함)
-      CONSUMER_NAME: character-service-1
 
   dungeon-service:
     <<: *db-service
     build:
       context: .
       dockerfile: dungeon-service/Dockerfile
-    ports:
-      - "8003:8003"
     environment:
       DATABASE_URL: postgresql+asyncpg://dungeon_user:${DUNGEON_DB_PASSWORD}@postgres:5432/dungeon_db
       REDIS_URL: redis://redis:6379/0
@@ -65,13 +59,10 @@ services:
     build:
       context: .
       dockerfile: quest-service/Dockerfile
-    ports:
-      - "8004:8004"
     environment:
       DATABASE_URL: postgresql+asyncpg://quest_user:${QUEST_DB_PASSWORD}@postgres:5432/quest_db
       REDIS_URL: redis://redis:6379/0
       CHARACTER_SERVICE_URL: http://character-service:8002
-      CONSUMER_NAME: quest-service-1
 
   postgres:
     image: postgres:16-alpine

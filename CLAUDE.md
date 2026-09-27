@@ -30,6 +30,8 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 | redis | 6379 | 이벤트 버스 (Streams) |
 | postgres | 5432 | 컨테이너 1개, 서비스별 DB/계정 분리 (`auth_db`, `character_db`, `dungeon_db`, `quest_db`) |
 
+호스트에는 Gateway(8000)만 열려 있다. 내부 서비스 포트(8001~8004)와 Redis(6379)는 `docker-compose.debug.yml` 오버레이를 쓸 때만 열린다.
+
 각 서비스 디렉토리는 동일한 내부 구조를 따른다: `app/main.py`, `app/models.py`, `app/schemas.py`, `app/routes.py`, 그리고 `pyproject.toml`/`uv.lock`, `alembic/`, `tests/`.
 새 서비스를 추가할 때도 이 구조를 그대로 따를 것.
 
@@ -45,21 +47,35 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 - **스탯 갱신**: 전투 결과에 따른 스탯 변경은 이벤트 컨슈머 → 내부 함수(`app/progression.py`)로만. 전투 결과를 반영하는 HTTP 엔드포인트를 만들지 않는다. 휴식처럼 플레이어가 직접 하는 행동은 HTTP로 처리한다
 - **퀘스트 규칙**: 기획서 4.5.1이 기준. 진행 규칙은 quest-service `app/tracking.py`에 둔다
 - **관측성**: 로그는 JSON 한 줄(`app/observability.py`). 로그 값은 `%s` 포맷 대신 `extra={...}`로 남긴다. 다른 서비스 HTTP 호출은 correlation ID 훅이 걸린 `app.state.http_client`로만 하고, 이벤트 발행 시 `correlation_id`를 채운다 (컨슈머는 자동으로 이어 붙임)
-- **공통 파일 동기화**: `app/errors.py`, `app/observability.py`는 5개 서비스에서 내용이 같아야 한다. 수정하면 모든 서비스에 복사한다
-- **컨슈머 구조**: `app/consumer.py`의 `HANDLERS`(스트림 → 처리 함수)에 스트림을 추가하는 방식. 처리 함수가 반환한 이벤트는 커밋 후 발행한다
+- **공통 파일 동기화**: 아래 파일은 해당 서비스들에서 내용이 같아야 한다. 하나를 수정하면 모두 복사한다
+  - `app/errors.py`, `app/observability.py`: 모든 서비스
+  - `app/consumer.py`: 이벤트를 구독하는 서비스 / `app/outbox.py`: DB를 가진 이벤트 발행 서비스
+- **컨슈머 구조**: 범용 `StreamConsumer`(`app/consumer.py`)에 서비스별 `GROUP`/`HANDLERS`(`app/handlers.py`)를 넘긴다. 성공하면 ACK, 실패하면 pending으로 남겨 XAUTOCLAIM으로 재시도, 3회 실패·파싱/스키마 오류는 `{stream}.dlq`로 보낸다 (기획서 5.3)
+- **이벤트 발행**: DB를 가진 서비스는 Redis에 직접 `XADD`하지 않고 `add_to_outbox(session, event)`로 상태 변경과 같은 트랜잭션에 저장한다 (릴레이가 발행). DB가 없는 dungeon-service는 `XADD` + 세션 삭제를 Redis `MULTI`로 묶는다
+- **스케일 아웃**: 컨슈머 이름은 hostname이라 `--scale`로 늘릴 수 있다. 마이그레이션은 Postgres advisory lock으로 인스턴스 간 직렬화된다
 - **전투 규칙**: 기획서 4.4.1이 기준. dungeon-service `app/combat.py`는 I/O 없는 순수 로직으로 유지하고 난수는 반드시 세션 시드에서 파생한다
 
 ## 개발 명령어
 
 ```bash
-# 전체 스택 기동
-docker-compose up --build
+# 전체 스택 기동 (호스트에는 Gateway 8000만 열림)
+docker compose up --build -d
+
+# 디버깅: 내부 서비스(Swagger)와 Redis 포트까지 열기
+docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build -d
+
+# 컨슈머 서비스 스케일 아웃 (디버그 오버레이 없이)
+docker compose up -d --scale character-service=2 --scale quest-service=2
 
 # 특정 서비스만 재빌드 후 기동
-docker-compose up --build character-service
+docker compose up --build -d character-service
 
 # 로그 확인
-docker-compose logs -f dungeon-service
+docker compose logs -f dungeon-service
+
+# DLQ 확인/재처리/삭제 (Redis 포트가 열린 디버그 오버레이 필요)
+uv run tools/dlq.py list
+uv run tools/dlq.py redrive dungeon.combat_result.dlq
 
 # 서비스별 단위 테스트 (예시: character-service)
 cd character-service && uv run pytest
@@ -95,8 +111,8 @@ docker compose exec character-service alembic upgrade head
 
 새 이벤트를 추가하거나 수정할 때 아래를 항상 함께 갱신한다:
 1. `shared/events.py`에 Pydantic 스키마 정의/수정
-2. 발행 서비스: `redis_client.xadd(Event.stream_key, event.to_fields())` (필드 `data`에 JSON 전체), 구독 쪽은 `Event.from_fields(fields)`
-3. 구독 서비스: Consumer Group 이름은 `{service-name}-group` 규칙을 따른다. `event_id`로 멱등 처리(`processed_events` 테이블에 같은 트랜잭션으로 기록)하고, 시작 시 pending 메시지부터 재처리한다
+2. 발행 서비스: `add_to_outbox(session, event)` (DB 없는 서비스는 `event.to_fields()`로 `XADD`). 스트림 필드 `data`에 JSON 전체가 들어간다
+3. 구독 서비스: `app/handlers.py`의 `HANDLERS`에 스트림 → 처리 함수 추가, Consumer Group 이름은 `{service-name}-group`. 처리 함수는 `Event.from_fields(fields)`로 파싱하고 `event_id`로 멱등 처리(`processed_events`에 같은 트랜잭션으로 기록)
 4. `기획서_및_계획서.md`의 "5. 이벤트 설계" 표를 최신 상태로 업데이트
 
 ## 하지 말아야 할 것
