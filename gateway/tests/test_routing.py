@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.config import settings
-from app.main import app
+from app.main import app, propagate_correlation_id
 from app.routes import get_http_client
 
 pytestmark = pytest.mark.anyio
@@ -44,7 +44,10 @@ async def client(upstream: list[httpx.Request]) -> AsyncIterator[httpx.AsyncClie
             return httpx.Response(200, json={"user_id": request.headers.get("x-user-id")})
         raise AssertionError(f"unexpected upstream: {url}")
 
-    fake_client = httpx.AsyncClient(transport=httpx.MockTransport(fake_services))
+    fake_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(fake_services),
+        event_hooks={"request": [propagate_correlation_id]},
+    )
     app.dependency_overrides[get_http_client] = lambda: fake_client
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://gateway") as c:
@@ -130,3 +133,23 @@ async def test_quest_route_forwards_query_string(
     forwarded = upstream[-1]
     assert str(forwarded.url) == f"{settings.quest_service_url}/quests/progress?character_id=5"
     assert forwarded.headers["x-user-id"] == "7"
+
+
+async def test_request_id_is_generated_and_forwarded(
+    client: httpx.AsyncClient, upstream: list[httpx.Request]
+) -> None:
+    response = await client.get("/characters", headers={"Authorization": "Bearer good"})
+    request_id = response.headers["x-request-id"]
+    assert request_id
+    # 토큰 검증 호출과 실제 전달 요청 모두 같은 ID를 가진다
+    assert [r.headers["x-request-id"] for r in upstream] == [request_id, request_id]
+
+
+async def test_client_request_id_is_kept(
+    client: httpx.AsyncClient, upstream: list[httpx.Request]
+) -> None:
+    response = await client.post(
+        "/auth/login", json={}, headers={"X-Request-ID": "trace-me"}
+    )
+    assert response.headers["x-request-id"] == "trace-me"
+    assert upstream[-1].headers["x-request-id"] == "trace-me"
