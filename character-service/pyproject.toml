@@ -7,6 +7,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
     "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
     "sqlalchemy[asyncio]>=2.1.1",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -21,6 +22,7 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
+    "fakeredis>=2.38.0",
     "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]

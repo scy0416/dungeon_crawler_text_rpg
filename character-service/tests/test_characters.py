@@ -1,5 +1,8 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.models import Character
 
 pytestmark = pytest.mark.anyio
 
@@ -48,3 +51,38 @@ async def test_get_character_not_found(client: AsyncClient) -> None:
     response = await client.get("/characters/999")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "CHARACTER_NOT_FOUND"
+
+
+async def test_inventory_starts_empty(client: AsyncClient) -> None:
+    created = await client.post("/characters", json={"name": "Aria"}, headers=USER_1)
+    response = await client.get(f"/characters/{created.json()['id']}/inventory")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_inventory_of_unknown_character(client: AsyncClient) -> None:
+    response = await client.get("/characters/999/inventory")
+    assert response.status_code == 404
+
+
+async def test_rest_restores_hp_and_mp(
+    client: AsyncClient, sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    created = await client.post("/characters", json={"name": "Aria"}, headers=USER_1)
+    character_id = created.json()["id"]
+    async with sessionmaker() as session:
+        character = await session.get(Character, character_id)
+        assert character is not None
+        character.hp, character.mp = 1, 0
+        await session.commit()
+
+    response = await client.post(f"/characters/{character_id}/rest", headers=USER_1)
+    assert response.status_code == 200
+    assert (response.json()["hp"], response.json()["mp"]) == (100, 50)
+
+
+async def test_rest_others_character_is_forbidden(client: AsyncClient) -> None:
+    created = await client.post("/characters", json={"name": "Aria"}, headers=USER_1)
+    response = await client.post(f"/characters/{created.json()['id']}/rest", headers=USER_2)
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "NOT_CHARACTER_OWNER"

@@ -30,7 +30,16 @@ class CharacterResponse(BaseModel):
     level: int
     exp: int
     hp: int
+    max_hp: int
     mp: int
+    max_mp: int
     atk: int
     defense: int
     created_at: datetime
+
+
+class InventoryItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    item_id: int
+    quantity: int
