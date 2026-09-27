@@ -36,6 +36,8 @@ async def client(upstream: list[httpx.Request]) -> AsyncIterator[httpx.AsyncClie
             )
         if url.startswith(settings.auth_service_url):
             return httpx.Response(201, json={"id": 1, "username": "hero"})
+        if url.startswith(settings.quest_service_url):
+            return httpx.Response(200, json={"user_id": request.headers.get("x-user-id")})
         if url.startswith(settings.dungeon_service_url):
             return httpx.Response(201, json={"user_id": request.headers.get("x-user-id")})
         if url.startswith(settings.character_service_url):
@@ -115,4 +117,16 @@ async def test_dungeon_route_is_protected_and_forwarded(
     assert response.status_code == 201
     forwarded = upstream[-1]
     assert str(forwarded.url) == f"{settings.dungeon_service_url}/dungeons/1/enter"
+    assert forwarded.headers["x-user-id"] == "7"
+
+
+async def test_quest_route_forwards_query_string(
+    client: httpx.AsyncClient, upstream: list[httpx.Request]
+) -> None:
+    response = await client.get(
+        "/quests/progress", params={"character_id": 5}, headers={"Authorization": "Bearer good"}
+    )
+    assert response.status_code == 200
+    forwarded = upstream[-1]
+    assert str(forwarded.url) == f"{settings.quest_service_url}/quests/progress?character_id=5"
     assert forwarded.headers["x-user-id"] == "7"

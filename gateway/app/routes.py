@@ -110,3 +110,13 @@ async def dungeon_proxy(request: Request, client: HttpClient, path: str = "") ->
         return auth
     url = f"{settings.dungeon_service_url}/dungeons" + (f"/{path}" if path else "")
     return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})
+
+
+@router.api_route("/quests", methods=METHODS)
+@router.api_route("/quests/{path:path}", methods=METHODS)
+async def quest_proxy(request: Request, client: HttpClient, path: str = "") -> Response:
+    auth = await authenticate(client, request)
+    if isinstance(auth, Response):
+        return auth
+    url = f"{settings.quest_service_url}/quests" + (f"/{path}" if path else "")
+    return await forward(client, request, url, {"X-User-Id": str(auth.user_id)})
