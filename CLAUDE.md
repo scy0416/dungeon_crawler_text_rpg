@@ -44,6 +44,8 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 - **테스트 DB**: 단위 테스트는 인메모리 SQLite(aiosqlite)로 `get_session`을 override 한다. 테스트에서만 `create_all` 허용
 - **스탯 갱신**: 전투 결과에 따른 스탯 변경은 이벤트 컨슈머 → 내부 함수(`app/progression.py`)로만. 전투 결과를 반영하는 HTTP 엔드포인트를 만들지 않는다. 휴식처럼 플레이어가 직접 하는 행동은 HTTP로 처리한다
 - **퀘스트 규칙**: 기획서 4.5.1이 기준. 진행 규칙은 quest-service `app/tracking.py`에 둔다
+- **관측성**: 로그는 JSON 한 줄(`app/observability.py`). 로그 값은 `%s` 포맷 대신 `extra={...}`로 남긴다. 다른 서비스 HTTP 호출은 correlation ID 훅이 걸린 `app.state.http_client`로만 하고, 이벤트 발행 시 `correlation_id`를 채운다 (컨슈머는 자동으로 이어 붙임)
+- **공통 파일 동기화**: `app/errors.py`, `app/observability.py`는 5개 서비스에서 내용이 같아야 한다. 수정하면 모든 서비스에 복사한다
 - **컨슈머 구조**: `app/consumer.py`의 `HANDLERS`(스트림 → 처리 함수)에 스트림을 추가하는 방식. 처리 함수가 반환한 이벤트는 커밋 후 발행한다
 - **전투 규칙**: 기획서 4.4.1이 기준. dungeon-service `app/combat.py`는 I/O 없는 순수 로직으로 유지하고 난수는 반드시 세션 시드에서 파생한다
 
@@ -63,9 +65,15 @@ docker-compose logs -f dungeon-service
 cd character-service && uv run pytest
 
 # 전체 서비스 테스트 (리포지토리 루트에서)
-for d in auth-service character-service dungeon-service quest-service; do
+for d in gateway auth-service character-service dungeon-service quest-service; do
   (cd "$d" && uv run pytest)
 done
+
+# 엔드투엔드 테스트 (docker compose up 상태에서, Gateway로만 검증)
+cd e2e && uv run pytest
+
+# 요청 하나의 전체 흐름 추적
+docker compose logs --no-log-prefix | grep '"correlation_id": "<X-Request-ID>"'
 
 # 의존성 추가 (예시)
 cd character-service && uv add httpx
