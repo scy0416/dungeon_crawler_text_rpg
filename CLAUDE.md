@@ -27,10 +27,11 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 | character-service | 8002 | 캐릭터 스탯/인벤토리, `combat_result`/`quest.completed` 구독, `level_up` 발행 |
 | dungeon-service | 8003 | 전투 로직, `combat_result` 발행 |
 | quest-service | 8004 | 퀘스트 진행도, `combat_result`/`level_up` 구독, `quest.completed` 발행 |
+| notification-service | 8005 | 알림 저장/조회, `quest.completed`/`level_up` 구독 |
 | redis | 6379 | 이벤트 버스 (Streams) |
-| postgres | 5432 | 컨테이너 1개, 서비스별 DB/계정 분리 (`auth_db`, `character_db`, `dungeon_db`, `quest_db`) |
+| postgres | 5432 | 컨테이너 1개, 서비스별 DB/계정 분리 (`auth_db`, `character_db`, `dungeon_db`, `quest_db`, `notification_db`) |
 
-호스트에는 Gateway(8000)만 열려 있다. 내부 서비스 포트(8001~8004)와 Redis(6379)는 `docker-compose.debug.yml` 오버레이를 쓸 때만 열린다.
+호스트에는 Gateway(8000)만 열려 있다. 내부 서비스 포트(8001~8005)와 Redis(6379)는 `docker-compose.debug.yml` 오버레이를 쓸 때만 열린다.
 
 각 서비스 디렉토리는 동일한 내부 구조를 따른다: `app/main.py`, `app/models.py`, `app/schemas.py`, `app/routes.py`, 그리고 `pyproject.toml`/`uv.lock`, `alembic/`, `tests/`.
 새 서비스를 추가할 때도 이 구조를 그대로 따를 것.
@@ -81,9 +82,12 @@ uv run tools/dlq.py redrive dungeon.combat_result.dlq
 cd character-service && uv run pytest
 
 # 전체 서비스 테스트 (리포지토리 루트에서)
-for d in gateway auth-service character-service dungeon-service quest-service; do
+for d in gateway auth-service character-service dungeon-service quest-service notification-service; do
   (cd "$d" && uv run pytest)
 done
+
+# 서비스(DB)를 추가한 뒤 기존 Postgres 볼륨에 DB/계정 만들기 (멱등)
+docker compose exec postgres bash /docker-entrypoint-initdb.d/init-databases.sh
 
 # 엔드투엔드 테스트 (docker compose up 상태에서, Gateway로만 검증)
 cd e2e && uv run pytest

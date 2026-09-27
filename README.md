@@ -15,20 +15,24 @@ flowchart TB
     gw -- "/characters/*" --> char[character-service :8002]
     gw -- "/dungeons/*" --> dun[dungeon-service :8003]
     gw -- "/quests/*" --> quest[quest-service :8004]
+    gw -- "/notifications/*" --> noti[notification-service :8005]
     gw -. "GET /auth/verify<br/>(토큰 검증 위임)" .-> auth
     dun -. "GET /characters/{id}" .-> char
     quest -. "GET /characters/{id}" .-> char
+    noti -. "GET /characters/{id}" .-> char
 
     dun == "dungeon.combat_result" ==> bus[(Redis Streams)]
     char == "character.level_up" ==> bus
     quest == "quest.completed" ==> bus
     bus == "combat_result, quest.completed" ==> char
     bus == "combat_result, level_up" ==> quest
+    bus == "quest.completed, level_up" ==> noti
 
     auth --- pg[(PostgreSQL<br/>서비스별 DB)]
     char --- pg
     dun --- pg
     quest --- pg
+    noti --- pg
 ```
 
 | 서비스 | 포트 | 책임 | DB |
@@ -38,6 +42,7 @@ flowchart TB
 | character-service | 8002 | 캐릭터·스탯·인벤토리, 휴식 / 전투 결과·퀘스트 보상 반영 | `character_db` |
 | dungeon-service | 8003 | 던전 입장, 턴제 전투(세션은 Redis) | `dungeon_db` |
 | quest-service | 8004 | 퀘스트 수락·진행도 추적 | `quest_db` |
+| notification-service | 8005 | 퀘스트 완료·레벨업 알림 저장/조회 | `notification_db` |
 | postgres | 5432 | 컨테이너 1개, 서비스별 DB와 전용 계정 | |
 | redis | 6379 | 이벤트 버스(Streams), 전투 세션 저장 | |
 
@@ -54,10 +59,13 @@ sequenceDiagram
     participant D as dungeon-service
     participant C as character-service
     participant Q as quest-service
+    participant N as notification-service
     D->>C: dungeon.combat_result (exp, 드롭, 남은 HP/MP)
     D->>Q: dungeon.combat_result
     Q->>C: quest.completed (보상 exp)
+    Q->>N: quest.completed (알림)
     C->>Q: character.level_up
+    C->>N: character.level_up (알림)
     Q->>C: quest.completed (레벨 도달 퀘스트 보상)
 ```
 
@@ -98,7 +106,10 @@ curl localhost:8000/health
 
 기동 시 각 서비스가 `alembic upgrade head`로 스키마와 시드 데이터(던전·몬스터·아이템·퀘스트)를 만듭니다.
 
-호스트에는 **Gateway(8000)만** 열립니다. 내부 서비스의 Swagger(`http://localhost:800{1..4}/docs`)나 Redis에 직접 접근하려면 디버그 오버레이를 함께 씁니다:
+> 이전 버전으로 만든 Postgres 볼륨을 쓰고 있다면 새 서비스의 DB가 없습니다. 초기화 스크립트는 여러 번 실행해도 안전하니 한 번 실행하세요:
+> `docker compose exec postgres bash /docker-entrypoint-initdb.d/init-databases.sh`
+
+호스트에는 **Gateway(8000)만** 열립니다. 내부 서비스의 Swagger(`http://localhost:800{1..5}/docs`)나 Redis에 직접 접근하려면 디버그 오버레이를 함께 씁니다:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build -d
@@ -125,6 +136,7 @@ curl -s -X POST $G/dungeons/1/combat -H "$J" -H "$A" -d '{"character_id":1,"acti
 curl -s $G/characters/1 -H "$A"                                              # 이벤트로 반영된 스탯
 curl -s "$G/quests/progress?character_id=1" -H "$A"                          # 퀘스트 진행도
 curl -s -X POST $G/characters/1/rest -H "$A"                                 # 휴식 (HP/MP 회복)
+curl -s "$G/notifications?character_id=1" -H "$A"                            # 알림 (퀘스트 완료·레벨업)
 ```
 
 ## API 요약 (Gateway 경로)
@@ -144,6 +156,8 @@ curl -s -X POST $G/characters/1/rest -H "$A"                                 # �
 | GET | `/quests` | 퀘스트 목록 | 필요 |
 | POST | `/quests/{id}/accept` | 퀘스트 수락 | 필요 |
 | GET | `/quests/progress?character_id=` | 퀘스트 진행도 | 필요 |
+| GET | `/notifications?character_id=&unread_only=` | 알림 목록 (최신순) | 필요 |
+| POST | `/notifications/{id}/read` | 알림 읽음 처리 | 필요 |
 
 모든 에러는 `{"error": {"code": "...", "message": "..."}}` 형식입니다.
 전투 규칙은 기획서 4.4.1, 퀘스트 규칙은 4.5.1에 있습니다.
@@ -167,7 +181,7 @@ docker compose logs --no-log-prefix | grep '"correlation_id": "<X-Request-ID 값
 서비스별 단위 테스트 (DB는 인메모리 SQLite, Redis는 fakeredis, 다른 서비스는 가짜 HTTP로 대체):
 
 ```bash
-for d in gateway auth-service character-service dungeon-service quest-service; do (cd "$d" && uv run pytest); done
+for d in gateway auth-service character-service dungeon-service quest-service notification-service; do (cd "$d" && uv run pytest); done
 ```
 
 엔드투엔드 테스트 (실행 중인 스택에 Gateway로만 붙어서 검증, 스택이 없으면 skip):
@@ -191,6 +205,7 @@ cd e2e && uv run pytest
 │                                      #   (+ 구독: consumer.py·handlers.py, 발행: outbox.py)
 ├── dungeon-service/                   #   alembic/, tests/, pyproject.toml, uv.lock, Dockerfile
 ├── quest-service/
+├── notification-service/
 └── e2e/                               # 엔드투엔드 테스트 (독립 uv 프로젝트)
 ```
 

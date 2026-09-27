@@ -20,11 +20,13 @@ services:
       CHARACTER_SERVICE_URL: http://character-service:8002
       DUNGEON_SERVICE_URL: http://dungeon-service:8003
       QUEST_SERVICE_URL: http://quest-service:8004
+      NOTIFICATION_SERVICE_URL: http://notification-service:8005
     depends_on:
       - auth-service
       - character-service
       - dungeon-service
       - quest-service
+      - notification-service
 
   auth-service:
     <<: *db-service
@@ -64,6 +66,16 @@ services:
       REDIS_URL: redis://redis:6379/0
       CHARACTER_SERVICE_URL: http://character-service:8002
 
+  notification-service:
+    <<: *db-service
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://notification_user:${NOTIFICATION_DB_PASSWORD}@postgres:5432/notification_db
+      REDIS_URL: redis://redis:6379/0
+      CHARACTER_SERVICE_URL: http://character-service:8002
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -73,6 +85,7 @@ services:
       CHARACTER_DB_PASSWORD: ${CHARACTER_DB_PASSWORD}
       DUNGEON_DB_PASSWORD: ${DUNGEON_DB_PASSWORD}
       QUEST_DB_PASSWORD: ${QUEST_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
