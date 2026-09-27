@@ -12,4 +12,6 @@ COPY shared/ ./shared/
 COPY auth-service/ ./
 
 EXPOSE 8001
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001"]
+# DB가 아직 준비되지 않았으면 마이그레이션을 재시도한다 (ECS에는 서비스 간 기동 순서가 없다).
+# exec로 uvicorn을 PID 1로 띄워야 컨테이너 종료 시 SIGTERM을 받아 정상 종료한다.
+CMD ["sh", "-c", "n=0; until alembic upgrade head; do n=$((n+1)); if [ $n -ge 20 ]; then echo 'migration failed' >&2; exit 1; fi; echo 'migration failed, retrying in 3s' >&2; sleep 3; done; exec uvicorn app.main:app --host 0.0.0.0 --port 8001"]
