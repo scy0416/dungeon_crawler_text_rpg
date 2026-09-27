@@ -95,3 +95,14 @@ async def test_quest_reward_grants_exp_and_can_level_up(
     [(_, fields)] = await redis.xrange(LevelUpEvent.stream_key)
     assert LevelUpEvent.from_fields(fields).new_level == 2
     assert (await redis.xpending(QuestCompletedEvent.stream_key, GROUP))["pending"] == 0
+
+
+async def test_correlation_id_is_carried_to_published_event(
+    setup: None, sessionmaker: Sessionmaker, redis: FakeAsyncRedis
+) -> None:
+    event = win_event(100)
+    event.correlation_id = "req-42"
+    await redis.xadd(STREAM, event.to_fields())
+    await consume_batch(redis, sessionmaker, CONSUMER, NEW)
+    [(_, fields)] = await redis.xrange(LevelUpEvent.stream_key)
+    assert LevelUpEvent.from_fields(fields).correlation_id == "req-42"

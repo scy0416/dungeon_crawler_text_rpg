@@ -48,12 +48,12 @@ async def claim_event(
     이미 처리한 이벤트거나 캐릭터가 없으면 None.
     """
     if await session.get(ProcessedEvent, event_id):
-        logger.info("duplicate event skipped event_id=%s", event_id)
+        logger.info("duplicate event skipped", extra={"event_id": event_id})
         return None
     session.add(ProcessedEvent(event_id=event_id))
     character = await session.get(Character, character_id, with_for_update=True)
     if character is None:
-        logger.warning("character not found character_id=%s", character_id)
+        logger.warning("character not found", extra={"character_id": character_id})
         await session.commit()
     return character
 

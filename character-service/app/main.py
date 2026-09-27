@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -10,9 +9,10 @@ from redis.asyncio import Redis
 from app.consumer import run_consumer
 from app.db import SessionLocal, settings
 from app.errors import register_error_handlers
-from app.routes import router
+from app.observability import add_correlation_middleware, setup_logging
+from app.routes import SERVICE_NAME, router
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(SERVICE_NAME)
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await redis.aclose()
 
 
-app = FastAPI(title="character-service", lifespan=lifespan)
+app = FastAPI(title=SERVICE_NAME, lifespan=lifespan)
+add_correlation_middleware(app)
 register_error_handlers(app)
 app.include_router(router)
