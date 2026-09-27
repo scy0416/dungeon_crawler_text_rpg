@@ -42,7 +42,8 @@ FastAPI 기반 MSA(마이크로서비스 아키텍처) 학습용 프로젝트: �
 - **인증**: Gateway가 auth-service `GET /auth/verify`에 검증을 위임하고, 통과하면 `X-User-Id` 헤더를 붙여 전달한다. 내부 서비스는 JWT를 직접 검증하지 않고 `X-User-Id`만 신뢰한다. JWT 비밀키는 auth-service만 가진다
 - **에러 처리**: 각 서비스의 `app/errors.py`에서 `AppError` + 예외 핸들러로 공통 에러 포맷을 만든다 (서비스 간 코드 공유 금지이므로 서비스마다 각자 둔다)
 - **테스트 DB**: 단위 테스트는 인메모리 SQLite(aiosqlite)로 `get_session`을 override 한다. 테스트에서만 `create_all` 허용
-- **스탯 갱신**: character-service의 스탯 변경은 이벤트 컨슈머 → 내부 함수로만. 스탯 변경용 HTTP 엔드포인트를 만들지 않는다
+- **스탯 갱신**: 전투 결과에 따른 스탯 변경은 이벤트 컨슈머 → 내부 함수(`app/progression.py`)로만. 전투 결과를 반영하는 HTTP 엔드포인트를 만들지 않는다. 휴식처럼 플레이어가 직접 하는 행동은 HTTP로 처리한다
+- **전투 규칙**: 기획서 4.4.1이 기준. dungeon-service `app/combat.py`는 I/O 없는 순수 로직으로 유지하고 난수는 반드시 세션 시드에서 파생한다
 
 ## 개발 명령어
 
@@ -84,8 +85,8 @@ docker compose exec character-service alembic upgrade head
 
 새 이벤트를 추가하거나 수정할 때 아래를 항상 함께 갱신한다:
 1. `shared/events.py`에 Pydantic 스키마 정의/수정
-2. 발행 서비스: `redis_client.xadd(stream_key, payload.model_dump())`
-3. 구독 서비스: Consumer Group 이름은 `{service-name}-group` 규칙을 따른다
+2. 발행 서비스: `redis_client.xadd(Event.stream_key, event.to_fields())` (필드 `data`에 JSON 전체), 구독 쪽은 `Event.from_fields(fields)`
+3. 구독 서비스: Consumer Group 이름은 `{service-name}-group` 규칙을 따른다. `event_id`로 멱등 처리(`processed_events` 테이블에 같은 트랜잭션으로 기록)하고, 시작 시 pending 메시지부터 재처리한다
 4. `기획서_및_계획서.md`의 "5. 이벤트 설계" 표를 최신 상태로 업데이트
 
 ## 하지 말아야 할 것
